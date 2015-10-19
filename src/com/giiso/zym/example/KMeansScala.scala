@@ -7,16 +7,18 @@ object KMeansScala {
   
   def main(args:Array[String]){
     if(args.length < 2){
-      println("Please input <dataFile> <knumbers>")
+      println("Please input <dataFile> <knumbers> <epsilon>")
       return
     }
     
     //val master = args(0)
     val dataFile = args(0)
     val knumbers = args(1).toInt
+    val epsilon = args(2).toDouble
     
     val conf = new SparkConf()    
     val sc = new SparkContext(conf)
+    // read the data from file
     val lines = sc.textFile(dataFile)
     
     val points = lines.map ( line => {
@@ -32,7 +34,7 @@ object KMeansScala {
     
     val startTime = System.currentTimeMillis()
     
-    val resultCentroids = kmeans(points,centroids,0.01,sc)
+    val resultCentroids = kmeans(points,centroids,epsilon,sc)
     
     val endTime = System.currentTimeMillis()
     val runTime = endTime - startTime
