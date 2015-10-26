@@ -6,7 +6,7 @@ import org.apache.spark.streaming.Seconds
 
 object NetworkWordCount {
    def main(args:Array[String]){
-    if(args.length < 2){
+    if(args.length < 3){
       println("Usage: <ip> <port> <seconds>")
       return
     }
