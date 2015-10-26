@@ -2,6 +2,7 @@ package com.giiso.zym.example
 
 import org.apache.spark.SparkContext
 import org.apache.spark._
+import scala.io.Source
 
 object KMeansScala {
   
@@ -19,18 +20,18 @@ object KMeansScala {
     val conf = new SparkConf()    
     val sc = new SparkContext(conf)
     // read the data from file
-    val lines = sc.textFile(dataFile)
+    val lines = Source.fromFile(dataFile).getLines.toArray
     
     val points = lines.map ( line => {
         val parts = line.split("\t").map(_.toDouble)
           new Point(parts(0) , parts(1))
-    } ).cache()
+    } ).toArray
     
     //初始化K个质心
     val centroids = Array.fill(knumbers) {Point.random}
     println("test points: ")
     points.foreach(println(_))
-    println("initialuize centroids: \n" + centroids.mkString("\n") + "\n")
+    println("initialize centroids: \n" + centroids.mkString("\n") + "\n")
     
     val startTime = System.currentTimeMillis()
     
@@ -43,24 +44,24 @@ object KMeansScala {
   }
   
   
-  def kmeans(points: rdd.RDD[Point], centroids: Seq[Point], epsilon: Double, sc: SparkContext): Seq[Point]={
-    def closestCentroid(point: Point) = {
+  def kmeans(points: Seq[Point], centroids: Seq[Point], epsilon: Double, sc: SparkContext): Seq[Point]={
+    def closestCentroid(centroids: Seq[Point],point: Point) = {
       centroids.reduceLeft((a,b) => if ((point distance a) < (point distance b)) a else b)
     }
-    var cluster = points.map ( point => (closestCentroid(point) -> (point,1)) )
-    // cluster.foreach(println(_))
+    val clusters = points.groupBy(closestCentroid(centroids, _))
+     println("clusters: n"+ clusters.mkString("n") +"n")
     
-    var clusterSum = cluster.reduceByKey{ case ((ptA, numA),(ptB, numB)) => (ptA + ptB, numA + numB)}
-    var average = clusterSum.map {pair => (pair._1,pair._2._1/pair._2._2)}.collectAsMap()
+    //var clusterSum = clusters.reduceByKey{ case ((ptA, numA),(ptB, numB)) => (ptA + ptB, numA + numB)}
+    //var average = clusterSum.map {pair => (pair._1,pair._2._1/pair._2._2)}.collectAsMap()
     
     val newCentroids = centroids.map(oldCentroid => {
-      average.get(oldCentroid) match{
-        case Some(newCentroid) => newCentroid
+      clusters.get(oldCentroid) match{
+        case Some(pointsInCluster) => pointsInCluster.reduceLeft(_ + _) / pointsInCluster.length
         case None => oldCentroid
       }
     })
     
-    val movement = (centroids, newCentroids).zipped.map(_ distance _)
+    val movement = (centroids zip newCentroids).map({case (a, b) => a distance b })
     println("Centroids changed by \n" + movement.map(d => "%sf".format(d)).mkString("(",",",")") 
     + "\nto\n" + newCentroids.mkString(",") + "\n")
     
