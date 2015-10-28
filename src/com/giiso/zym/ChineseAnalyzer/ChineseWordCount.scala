@@ -1,15 +1,17 @@
-package com.giiso.zym.streaming
+package com.giiso.zym.ChineseAnalyzer
 
 import org.apache.log4j.{Level, Logger}
 import org.apache.spark.{SparkContext, SparkConf}
 import org.apache.spark.streaming.{Seconds, StreamingContext}
 import org.apache.spark.streaming.StreamingContext._
 import org.apache.spark.streaming.dstream.DStream.toPairDStreamFunctions
+import collection.mutable.ArrayBuffer
+import scala.io.Source
  
-object StatefulWordCount {
+object ChineseWordCount {
   def main(args: Array[String]) {
-    if (args.length != 2) {
-      System.err.println("Usage: StatefulWordCount <filename> <port> ")
+    if (args.length != 3) {
+      System.err.println("Usage: StatefulWordCount <filename> <port> <dict-filename> ")
       System.exit(1)
     }
     Logger.getLogger("org.apache.spark").setLevel(Level.ERROR)
@@ -32,14 +34,41 @@ object StatefulWordCount {
  
     // 获取从Socket发送过来数据
     val lines = ssc.socketTextStream(args(0), args(1).toInt)
-    val words = lines.flatMap(_.split(","))
-    val wordCounts = words.map(x => (x, 1))
+    val wordLists = Source.fromFile(args(2),"utf-8").getLines.toArray
+    val words = lines.flatMap(segmentation(wordLists,15,_))
+    val wordCounts = words.map((_,1))
  
     // 使用updateStateByKey来更新状态，统计从运行开始以来单词总的次数
     val stateDstream = wordCounts.updateStateByKey[Int](updateFunc)
     
-    wordCounts.print() 
+    val topStream = stateDstream.map {
+        case(key, value) => (value, key); //exchange key and value
+    }.transform(_.sortByKey(false))
+    topStream.print()
     ssc.start()
     ssc.awaitTermination()
+  }
+  
+  def segmentation(strList:Seq[String],maxLen:Int,stc:String): Seq[String]={
+    var sentence = stc
+    var wordList = new ArrayBuffer[String]()
+      while(sentence.length()>0){
+        var min = sentence.length()
+        if ( min > maxLen) {
+          min = maxLen
+        }
+        var word = sentence.substring(0,min)
+        var meet = false
+        while (!meet && word.length()>0){
+          if ((strList.contains(word)) || word.length()==1 ){
+            wordList += word
+            sentence = sentence.substring(word.length(),sentence.length())
+            meet = true
+          }else{
+            word = word.substring(0,word.length()-1)
+          }          
+        }
+      }
+    return wordList.filter { x => x.length()!=1 }
   }
 }
